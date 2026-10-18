@@ -63,6 +63,8 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-search.py --profile server query "p
 | `username` | If `auth: "cloud"` | Atlassian account email |
 | `api_token` | If `auth: "cloud"` | Atlassian API token |
 | `projects` | No | List of project prefixes for auto-resolution from issue keys |
+| `http_proxy` | No | Proxy URL for HTTP Jira requests; overrides environment proxy settings |
+| `https_proxy` | No | Proxy URL for HTTPS Jira requests; overrides environment proxy settings |
 
 ### Top-Level Keys
 

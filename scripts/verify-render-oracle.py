@@ -34,7 +34,7 @@ _REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO / "skills/jira-communication/scripts"))
 
 import requests  # noqa: E402
-from lib.config import load_env  # noqa: E402
+from lib.config import get_configured_proxies, load_env  # noqa: E402
 
 FIXTURE = _REPO / "tests/fixtures/strikethrough_oracle.json"
 
@@ -44,11 +44,12 @@ FIXTURE = _REPO / "tests/fixtures/strikethrough_oracle.json"
 RENDER_PATH = "/rest/api/1.0/render"
 
 
-def render(session: requests.Session, base_url: str, markup: str) -> str:
+def render(session: requests.Session, base_url: str, markup: str, proxies: dict | None = None) -> str:
     response = session.post(
         f"{base_url.rstrip('/')}{RENDER_PATH}",
         json={"rendererType": "atlassian-wiki-renderer", "unrenderedMarkup": markup, "issueKey": None},
         timeout=30,
+        proxies=proxies,
     )
     response.raise_for_status()
     return response.text
@@ -67,6 +68,7 @@ def main() -> int:
     args = parser.parse_args()
 
     config = load_env(args.env_file)
+    proxies = get_configured_proxies(config)
     base_url = config.get("JIRA_URL")
     if not base_url:
         print("error: JIRA_URL is not set - see lib/config.py", file=sys.stderr)
@@ -84,7 +86,7 @@ def main() -> int:
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
     drift = []
     for case in fixture["cases"]:
-        live = render(session, base_url, case["markup"])
+        live = render(session, base_url, case["markup"], proxies)
         if live != case["rendered"]:
             drift.append(case["markup"])
             print(f"DRIFT  {case['markup']!r}\n  fixture: {case['rendered'].strip()!r}\n  live   : {live.strip()!r}")

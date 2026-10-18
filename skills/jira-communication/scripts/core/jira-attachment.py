@@ -36,7 +36,7 @@ from lib.client import (
     _handle_response,
     _sanitize_error,
 )
-from lib.config import load_config
+from lib.config import get_configured_proxies, load_config
 from lib.output import error, success, warning
 from urllib3.util import parse_url
 
@@ -179,7 +179,7 @@ def _build_auth(config: dict) -> tuple[tuple[str, str] | None, dict]:
     return (config["JIRA_USERNAME"], config["JIRA_API_TOKEN"]), {}
 
 
-def _stream_to_path(url: str, jira_url: str, auth, headers: dict, safe_path: Path) -> None:
+def _stream_to_path(url: str, jira_url: str, auth, headers: dict, safe_path: Path, proxies: dict | None = None) -> None:
     """Stream an attachment URL to safe_path with CDN-redirect protection.
 
     Follows exactly one CDN redirect without forwarding credentials, refuses
@@ -195,6 +195,7 @@ def _stream_to_path(url: str, jira_url: str, auth, headers: dict, safe_path: Pat
         stream=True,
         verify=True,
         timeout=DOWNLOAD_TIMEOUT,
+        proxies=proxies,
     )
 
     # Follow one CDN redirect without forwarding credentials (Jira Cloud stores
@@ -326,7 +327,7 @@ def download(ctx, attachment_url: str, output_file: str):
             error(f"Output path exists and is not a file: {output_file}")
             sys.exit(1)
 
-        _stream_to_path(url, jira_url, auth, headers, safe_path)
+        _stream_to_path(url, jira_url, auth, headers, safe_path, get_configured_proxies(config))
 
         if ctx.obj["quiet"]:
             print(str(safe_path))
@@ -365,6 +366,7 @@ def download_all(ctx, issue_key: str, output_dir: str, dry_run: bool):
         config = load_config(env_file=ctx.obj["env_file"], profile=ctx.obj.get("profile"))
         jira_url = config["JIRA_URL"]
         auth, headers = _build_auth(config)
+        proxies = get_configured_proxies(config)
 
         # Path traversal protection: constrain output dir within cwd (matches `download`)
         safe_dir = validate_output_path(output_dir, Path.cwd())
@@ -380,6 +382,7 @@ def download_all(ctx, issue_key: str, output_dir: str, dry_run: bool):
             headers={**headers, "Accept": "application/json"},
             verify=True,
             timeout=DOWNLOAD_TIMEOUT,
+            proxies=proxies,
         )
         _handle_response(meta_response, jira_url, url=getattr(meta_response, "url", None))
         meta_response.raise_for_status()
@@ -444,7 +447,7 @@ def download_all(ctx, issue_key: str, output_dir: str, dry_run: bool):
                 continue
 
             try:
-                _stream_to_path(content_url, jira_url, auth, headers, dest)
+                _stream_to_path(content_url, jira_url, auth, headers, dest, proxies)
             except (DownloadError, requests.exceptions.RequestException) as e:
                 warning(f"Skipping {filename}: {_sanitize_error(str(e))}")
                 continue

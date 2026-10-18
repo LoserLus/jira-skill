@@ -311,7 +311,21 @@ def profile_to_config(prof: dict) -> dict:
             raise ValueError("Profile is missing required 'token' field for PAT auth")
         config["JIRA_PERSONAL_TOKEN"] = prof["token"]
 
+    for scheme in ("http", "https"):
+        proxy = prof.get(f"{scheme}_proxy")
+        if proxy:
+            config[f"JIRA_{scheme.upper()}_PROXY"] = proxy
+
     return config
+
+
+def get_configured_proxies(config: dict) -> dict[str, str]:
+    """Return only proxies explicitly configured for Jira requests."""
+    return {
+        scheme: config[f"JIRA_{scheme.upper()}_PROXY"]
+        for scheme in ("http", "https")
+        if config.get(f"JIRA_{scheme.upper()}_PROXY")
+    }
 
 
 def load_config(

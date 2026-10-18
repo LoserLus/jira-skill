@@ -102,3 +102,9 @@ State what happened, not how good it is — `references/no-editorializing.md`.
 ## Authentication
 
 Cloud: `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`. Server/DC: `JIRA_URL` + `JIRA_PERSONAL_TOKEN`. Config via `~/.env.jira` or `~/.jira/profiles.json`.
+
+## Proxies
+
+Set `JIRA_HTTP_PROXY` and/or `JIRA_HTTPS_PROXY` in `~/.env.jira`, or `http_proxy` and/or `https_proxy` in the selected `~/.jira/profiles.json` profile. Each value is a proxy URL such as `http://proxy.example.com:8080` and applies to Jira requests using that URL scheme.
+
+For each scheme, a configured Jira proxy takes priority over environment proxy settings. If no Jira proxy is configured for that scheme, Requests uses standard environment settings (`http_proxy`, `https_proxy`, `all_proxy`, and `no_proxy`, including uppercase variants). With no applicable proxy, requests connect directly. A configured Jira proxy is used even when `NO_PROXY` matches the Jira host.

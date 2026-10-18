@@ -11,7 +11,7 @@ from requests import Response
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from .config import get_auth_mode, is_cloud_url, load_config, validate_config
+from .config import get_auth_mode, get_configured_proxies, is_cloud_url, load_config, validate_config
 from .errors import AuthenticationError, CaptchaError, _sanitize_error  # noqa: F401  (re-exported)
 from .users import find_users, is_cloud_client
 
@@ -373,7 +373,9 @@ def _handle_response(response: Response, jira_url: str, url: str | None = None) 
     _check_session_expiry(response, url or getattr(response, "url", ""))
 
 
-def _patch_session_for_response_validation(client: Jira, jira_url: str) -> None:
+def _patch_session_for_response_validation(
+    client: Jira, jira_url: str, configured_proxies: dict[str, str] | None = None
+) -> None:
     """Patch the Jira client session to run response validation on every request.
 
     The atlassian-python-api library doesn't inspect responses for CAPTCHA
@@ -384,10 +386,15 @@ def _patch_session_for_response_validation(client: Jira, jira_url: str) -> None:
     Args:
         client: Jira client instance to patch
         jira_url: Base Jira URL for error messages
+        configured_proxies: Explicit proxies to prefer over environment proxies
     """
     original_request = client._session.request
 
     def patched_request(method: str, url: str, **kwargs) -> Response:
+        if configured_proxies:
+            scheme = urlparse(url).scheme
+            if proxy := configured_proxies.get(scheme):
+                kwargs["proxies"] = {**(kwargs.get("proxies") or {}), scheme: proxy}
         response = original_request(method, url, **kwargs)
         _handle_response(response, jira_url, url=url)
         return response
@@ -652,8 +659,8 @@ def get_jira_client(
         client._session.mount("https://", adapter)
         client._session.mount("http://", adapter)
 
-        # Patch session to run response validation (CAPTCHA, authentication failures, session-expiry HTML pages)
-        _patch_session_for_response_validation(client, jira_url)
+        # Patch session to validate responses and apply explicit proxies per scheme.
+        _patch_session_for_response_validation(client, jira_url, get_configured_proxies(config))
 
         return client
     except CaptchaError:

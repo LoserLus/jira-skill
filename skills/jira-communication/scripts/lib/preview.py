@@ -35,7 +35,7 @@ from typing import Any
 
 import requests
 
-from lib.config import is_cloud_url, load_config
+from lib.config import get_configured_proxies, is_cloud_url, load_config
 
 RENDER_PATH = "/rest/api/1.0/render"
 DEFAULT_TIMEOUT = 10
@@ -202,6 +202,7 @@ def preflight_render(
             },
             headers={"Content-Type": "application/json"},
             timeout=timeout,
+            proxies=get_configured_proxies(config),
         )
     except requests.RequestException as exc:
         return RenderVerdict(False, [], f"render request failed: {type(exc).__name__}")

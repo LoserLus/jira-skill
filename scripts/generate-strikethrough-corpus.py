@@ -44,7 +44,7 @@ _REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO / "skills/jira-communication/scripts"))
 
 import requests  # noqa: E402
-from lib.config import load_env  # noqa: E402
+from lib.config import get_configured_proxies, load_env  # noqa: E402
 from lib.markup import find_strikethrough_spans  # noqa: E402
 
 FIXTURE = _REPO / "tests/fixtures/strikethrough_corpus.json"
@@ -125,7 +125,7 @@ def build_cases() -> list[str]:
     return list(dict.fromkeys(cases))
 
 
-def make_session(env_file: str | None) -> tuple[requests.Session, str]:
+def make_session(env_file: str | None) -> tuple[requests.Session, str, dict[str, str]]:
     config = load_env(env_file)
     base_url = config.get("JIRA_URL")
     if not base_url:
@@ -137,10 +137,12 @@ def make_session(env_file: str | None) -> tuple[requests.Session, str]:
         session.auth = (config["JIRA_USERNAME"], config["JIRA_API_TOKEN"])
     else:
         raise SystemExit("error: no Jira credentials found - see lib/config.py")
-    return session, base_url.rstrip("/")
+    return session, base_url.rstrip("/"), get_configured_proxies(config)
 
 
-def render(session: requests.Session, base_url: str, markup: str, attempts: int = 6) -> str:
+def render(
+    session: requests.Session, base_url: str, markup: str, attempts: int = 6, proxies: dict | None = None
+) -> str:
     """POST one snippet to the renderer, backing off when Jira throttles.
 
     A corpus run is thousands of requests, so a 429 is the normal case rather
@@ -152,6 +154,7 @@ def render(session: requests.Session, base_url: str, markup: str, attempts: int 
             f"{base_url}{RENDER_PATH}",
             json={"rendererType": "atlassian-wiki-renderer", "unrenderedMarkup": markup, "issueKey": None},
             timeout=30,
+            proxies=proxies,
         )
         if response.status_code == 429 or response.status_code >= 500:
             if attempt == attempts - 1:
@@ -262,12 +265,12 @@ def main() -> int:
     if not args.live:
         parser.error("pass --live to call Jira, or --repin to recompute from the recorded verdicts")
 
-    session, base_url = make_session(args.env_file)
+    session, base_url, proxies = make_session(args.env_file)
     cases = build_cases()
     print(f"{len(cases)} cases against {base_url}", file=sys.stderr)
 
     def one(markup: str) -> tuple[str, bool]:
-        return markup, "<del>" in render(session, base_url, markup)
+        return markup, "<del>" in render(session, base_url, markup, proxies=proxies)
 
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         results = dict(pool.map(one, cases))

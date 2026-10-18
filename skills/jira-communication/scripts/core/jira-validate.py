@@ -33,6 +33,7 @@ from lib.config import (
     DEFAULT_ENV_FILE,
     PROFILES_FILE,
     get_auth_mode,
+    get_configured_proxies,
     is_cloud_url,
     load_config,
     load_profiles,
@@ -148,7 +149,7 @@ def check_connectivity(
 
     # Test server reachability
     try:
-        response = requests.head(url, timeout=10, allow_redirects=True)
+        response = requests.head(url, timeout=10, allow_redirects=True, proxies=get_configured_proxies(config))
         info["server_reachable"] = True
         if verbose:
             success(f"Server reachable: {url} (status: {response.status_code})")
@@ -242,7 +243,9 @@ def validate_all_profiles(output_json: bool = False, verbose: bool = False) -> i
 
         # Quick connectivity check
         try:
-            response = requests.head(config["JIRA_URL"], timeout=5, allow_redirects=True)
+            response = requests.head(
+                config["JIRA_URL"], timeout=5, allow_redirects=True, proxies=get_configured_proxies(config)
+            )
             if response.status_code < 400 or response.status_code in (401, 403):
                 row["Status"] = "OK"
             else:
